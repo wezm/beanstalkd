@@ -20,20 +20,21 @@ cttestallocf()
 void
 cttestoptnone()
 {
+    Server *srv = server_new();
     char *args[] = {
         NULL,
     };
 
-    optparse(&srv, args);
-    assert(strcmp(srv.port, Portdef) == 0);
-    assert(srv.addr == NULL);
+    optparse(srv, args);
+    assert(strcmp(srv->port, Portdef) == 0);
+    assert(srv->addr == NULL);
     assert(job_data_size_limit == JOB_DATA_SIZE_LIMIT_DEFAULT);
-    assert(srv.wal.filesize == Filesizedef);
-    assert(srv.wal.nocomp == 0);
-    assert(srv.wal.wantsync == 0);
-    assert(srv.user == NULL);
-    assert(srv.wal.dir == NULL);
-    assert(srv.wal.use == 0);
+    assert(srv->wal.filesize == Filesizedef);
+    assert(srv->wal.nocomp == 0);
+    assert(srv->wal.wantsync == 0);
+    assert(srv->user == NULL);
+    assert(srv->wal.dir == NULL);
+    assert(srv->wal.use == 0);
     assert(verbose == 0);
 }
 
@@ -48,13 +49,14 @@ success(void)
 void
 cttestoptminus()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-",
         NULL,
     };
 
     atexit(success);
-    optparse(&srv, args);
+    optparse(srv, args);
     assertf(0, "optparse failed to call exit");
 }
 
@@ -62,52 +64,56 @@ cttestoptminus()
 void
 cttestoptp()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-p1234",
         NULL,
     };
 
-    optparse(&srv, args);
-    assert(strcmp(srv.port, "1234") == 0);
+    optparse(srv, args);
+    assert(strcmp(srv->port, "1234") == 0);
 }
 
 
 void
 cttestoptl()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-llocalhost",
         NULL,
     };
 
-    optparse(&srv, args);
-    assert(strcmp(srv.addr, "localhost") == 0);
+    optparse(srv, args);
+    assert(strcmp(srv->addr, "localhost") == 0);
 }
 
 
 void
 cttestoptlseparate()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-l",
         "localhost",
         NULL,
     };
 
-    optparse(&srv, args);
-    assert(strcmp(srv.addr, "localhost") == 0);
+    optparse(srv, args);
+    assert(strcmp(srv->addr, "localhost") == 0);
 }
 
 
 void
 cttestoptz()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-z1234",
         NULL,
     };
 
-    optparse(&srv, args);
+    optparse(srv, args);
     assert(job_data_size_limit == 1234);
 }
 
@@ -115,107 +121,115 @@ cttestoptz()
 void
 cttestopts()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-s1234",
         NULL,
     };
 
-    optparse(&srv, args);
-    assert(srv.wal.filesize == 1234);
+    optparse(srv, args);
+    assert(srv->wal.filesize == 1234);
 }
 
 
 void
 cttestoptc()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-n",
         "-c",
         NULL,
     };
 
-    optparse(&srv, args);
-    assert(srv.wal.nocomp == 0);
+    optparse(srv, args);
+    assert(srv->wal.nocomp == 0);
 }
 
 
 void
 cttestoptn()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-n",
         NULL,
     };
 
-    optparse(&srv, args);
-    assert(srv.wal.nocomp == 1);
+    optparse(srv, args);
+    assert(srv->wal.nocomp == 1);
 }
 
 
 void
 cttestoptf()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-f1234",
         NULL,
     };
 
-    optparse(&srv, args);
-    assert(srv.wal.syncrate == 1234000000);
-    assert(srv.wal.wantsync == 1);
+    optparse(srv, args);
+    assert(srv->wal.syncrate == 1234000000);
+    assert(srv->wal.wantsync == 1);
 }
 
 
 void
 cttestoptF()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-f1234",
         "-F",
         NULL,
     };
 
-    optparse(&srv, args);
-    assert(srv.wal.wantsync == 0);
+    optparse(srv, args);
+    assert(srv->wal.wantsync == 0);
 }
 
 
 void
 cttestoptu()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-ukr",
         NULL,
     };
 
-    optparse(&srv, args);
-    assert(strcmp(srv.user, "kr") == 0);
+    optparse(srv, args);
+    assert(strcmp(srv->user, "kr") == 0);
 }
 
 
 void
 cttestoptb()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-bfoo",
         NULL,
     };
 
-    optparse(&srv, args);
-    assert(strcmp(srv.wal.dir, "foo") == 0);
-    assert(srv.wal.use == 1);
+    optparse(srv, args);
+    assert(strcmp(srv->wal.dir, "foo") == 0);
+    assert(srv->wal.use == 1);
 }
 
 
 void
 cttestoptV()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-V",
         NULL,
     };
 
-    optparse(&srv, args);
+    optparse(srv, args);
     assert(verbose == 1);
 }
 
@@ -223,13 +237,14 @@ cttestoptV()
 void
 cttestoptV_V()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-V",
         "-V",
         NULL,
     };
 
-    optparse(&srv, args);
+    optparse(srv, args);
     assert(verbose == 2);
 }
 
@@ -237,12 +252,13 @@ cttestoptV_V()
 void
 cttestoptVVV()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-VVV",
         NULL,
     };
 
-    optparse(&srv, args);
+    optparse(srv, args);
     assert(verbose == 3);
 }
 
@@ -250,13 +266,14 @@ cttestoptVVV()
 void
 cttestoptVnVu()
 {
+    Server *srv = server_new();
     char *args[] = {
         "-VnVukr",
         NULL,
     };
 
-    optparse(&srv, args);
+    optparse(srv, args);
     assert(verbose == 2);
-    assert(srv.wal.nocomp == 1);
-    assert(strcmp(srv.user, "kr") == 0);
+    assert(srv->wal.nocomp == 1);
+    assert(strcmp(srv->user, "kr") == 0);
 }

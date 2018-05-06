@@ -90,7 +90,7 @@ bench: ct/_ctcheck
 	ct/_ctcheck -b
 
 ct/_ctcheck: ct/_ctcheck.o ct/ct.o $(OFILES) $(TOFILES) $(BEANSTALKD_RUST_LIB)
-	$(LINK.o) -fprofile-instr-generate -o $@ $^ $(LDLIBS)
+	$(LINK.o) -fprofile-instr-generate -g -o $@ $^ $(LDLIBS)
 
 ct/_ctcheck.c: $(TOFILES) ct/gen
 	ct/gen $(TOFILES) >$@.part

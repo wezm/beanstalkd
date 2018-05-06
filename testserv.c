@@ -90,22 +90,25 @@ mustdiallocal(int port)
 }
 
 
-#define SERVER() (progname=__func__, mustforksrv())
+#define SERVER(srv) (progname=__func__, mustforksrv(srv))
 
 static int
-mustforksrv()
+mustforksrv(Server *srv)
 {
     int r, len, port, ok;
     struct sockaddr_in addr;
+    if (srv == NULL) {
+        srv = server_new();
+    }
 
-    srv.sock.fd = make_server_socket("127.0.0.1", "0");
-    if (srv.sock.fd == -1) {
+    srv->sock.fd = make_server_socket("127.0.0.1", "0");
+    if (srv->sock.fd == -1) {
         puts("mustforksrv failed");
         exit(1);
     }
 
     len = sizeof(addr);
-    r = getsockname(srv.sock.fd, (struct sockaddr*)&addr, (socklen_t*)&len);
+    r = getsockname(srv->sock.fd, (struct sockaddr*)&addr, (socklen_t*)&len);
     if (r == -1 || len > sizeof(addr)) {
         puts("mustforksrv failed");
         exit(1);
@@ -127,26 +130,26 @@ mustforksrv()
 
     prot_init();
 
-    if (srv.wal.use) {
+    if (srv->wal.use) {
         struct job list = {};
         // We want to make sure that only one beanstalkd tries
         // to use the wal directory at a time. So acquire a lock
         // now and never release it.
-        if (!waldirlock(&srv.wal)) {
-            twarnx("failed to lock wal dir %s", srv.wal.dir);
+        if (!waldirlock(&srv->wal)) {
+            twarnx("failed to lock wal dir %s", srv->wal.dir);
             exit(10);
         }
 
         list.prev = list.next = &list;
-        walinit(&srv.wal, &list);
-        ok = prot_replay(&srv, &list);
+        walinit(&srv->wal, srv->store, &list);
+        ok = prot_replay(srv, &list);
         if (!ok) {
             twarnx("failed to replay log");
             exit(11);
         }
     }
 
-    srvserve(&srv); /* does not return */
+    srvserve(srv); /* does not return */
     exit(1); /* satisfy the compiler */
 }
 
@@ -279,7 +282,7 @@ cttestpause()
 {
     int64 s;
 
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 0 0 1\r\n");
     mustsend(fd, "x\r\n");
@@ -297,7 +300,7 @@ cttestpause()
 void
 cttestunderscore()
 {
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "use x_y\r\n");
     ckresp(fd, "USING x_y\r\n");
@@ -307,7 +310,7 @@ cttestunderscore()
 void
 cttest2cmdpacket()
 {
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "use a\r\nuse b\r\n");
     ckresp(fd, "USING a\r\n");
@@ -319,7 +322,7 @@ void
 cttesttoobig()
 {
     job_data_size_limit = 10;
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 0 0 11\r\n");
     mustsend(fd, "delete 9999\r\n");
@@ -333,7 +336,7 @@ cttesttoobig()
 void
 cttestdeleteready()
 {
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 0 0 0\r\n");
     mustsend(fd, "\r\n");
@@ -346,7 +349,7 @@ cttestdeleteready()
 void
 cttestmultitube()
 {
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "use abc\r\n");
     ckresp(fd, "USING abc\r\n");
@@ -370,7 +373,7 @@ cttestmultitube()
 void
 cttestnonegativedelay()
 {
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "put 512 -1 100 0\r\n");
     ckresp(fd, "BAD_FORMAT\r\n");
@@ -380,7 +383,7 @@ cttestnonegativedelay()
 void
 cttestomittimeleft()
 {
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 0 5 1\r\n");
     mustsend(fd, "a\r\n");
@@ -394,7 +397,7 @@ cttestomittimeleft()
 void
 cttestsmalldelay()
 {
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 1 1 0\r\n");
     mustsend(fd, "\r\n");
@@ -405,7 +408,7 @@ cttestsmalldelay()
 void
 ctteststatstube()
 {
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "use tubea\r\n");
     ckresp(fd, "USING tubea\r\n");
@@ -506,7 +509,7 @@ ctteststatstube()
 void
 cttestttrlarge()
 {
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 0 120 1\r\n");
     mustsend(fd, "a\r\n");
@@ -556,7 +559,7 @@ cttestttrlarge()
 void
 cttestttrsmall()
 {
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 0 0 1\r\n");
     mustsend(fd, "a\r\n");
@@ -570,7 +573,7 @@ cttestttrsmall()
 void
 cttestzerodelay()
 {
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 0 1 0\r\n");
     mustsend(fd, "\r\n");
@@ -585,7 +588,7 @@ cttestreservewithtimeout2conn()
 
     job_data_size_limit = 10;
 
-    port = SERVER();
+    port = SERVER(NULL);
     fd0 = mustdiallocal(port);
     fd1 = mustdiallocal(port);
     mustsend(fd0, "watch foo\r\n");
@@ -603,7 +606,7 @@ cttestunpausetube()
 {
     int fd0, fd1;
 
-    port = SERVER();
+    port = SERVER(NULL);
     fd0 = mustdiallocal(port);
     fd1 = mustdiallocal(port);
 
@@ -629,16 +632,17 @@ cttestunpausetube()
 void
 cttestbinlogemptyexit()
 {
-    srv.wal.dir = ctdir();
-    srv.wal.use = 1;
+    Server *srv = server_new();
+    srv->wal.dir = ctdir();
+    srv->wal.use = 1;
     job_data_size_limit = 10;
 
-    port = SERVER();
+    port = SERVER(srv);
 
     kill(srvpid, 9);
     waitpid(srvpid, NULL, 0);
 
-    port = SERVER();
+    port = SERVER(srv);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 0 0 0\r\n");
     mustsend(fd, "\r\n");
@@ -649,11 +653,12 @@ cttestbinlogemptyexit()
 void
 cttestbinlogbury()
 {
-    srv.wal.dir = ctdir();
-    srv.wal.use = 1;
+    Server *srv = server_new();
+    srv->wal.dir = ctdir();
+    srv->wal.use = 1;
     job_data_size_limit = 10;
 
-    port = SERVER();
+    port = SERVER(srv);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 0 100 0\r\n");
     mustsend(fd, "\r\n");
@@ -669,11 +674,12 @@ cttestbinlogbury()
 void
 cttestbinlogbasic()
 {
-    srv.wal.dir = ctdir();
-    srv.wal.use = 1;
+    Server *srv = server_new();
+    srv->wal.dir = ctdir();
+    srv->wal.use = 1;
     job_data_size_limit = 10;
 
-    port = SERVER();
+    port = SERVER(srv);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 0 100 0\r\n");
     mustsend(fd, "\r\n");
@@ -682,7 +688,7 @@ cttestbinlogbasic()
     kill(srvpid, 9);
     waitpid(srvpid, NULL, 0);
 
-    port = SERVER();
+    port = SERVER(srv);
     fd = mustdiallocal(port);
     mustsend(fd, "delete 1\r\n");
     ckresp(fd, "DELETED\r\n");
@@ -695,15 +701,16 @@ cttestbinlogsizelimit()
     int i = 0;
     char *b2;
     int gotsize;
+    Server *srv = server_new();
 
     size = 1024;
-    srv.wal.dir = ctdir();
-    srv.wal.use = 1;
-    srv.wal.filesize = size;
-    srv.wal.syncrate = 0;
-    srv.wal.wantsync = 1;
+    srv->wal.dir = ctdir();
+    srv->wal.use = 1;
+    srv->wal.filesize = size;
+    srv->wal.syncrate = 0;
+    srv->wal.wantsync = 1;
 
-    port = SERVER();
+    port = SERVER(srv);
     fd = mustdiallocal(port);
     b2 = fmtalloc("%s/binlog.2", ctdir());
     while (!exist(b2)) {
@@ -723,15 +730,16 @@ void
 cttestbinlogallocation()
 {
     int i = 0;
+    Server *srv = server_new();
 
     size = 601;
-    srv.wal.dir = ctdir();
-    srv.wal.use = 1;
-    srv.wal.filesize = size;
-    srv.wal.syncrate = 0;
-    srv.wal.wantsync = 1;
+    srv->wal.dir = ctdir();
+    srv->wal.use = 1;
+    srv->wal.filesize = size;
+    srv->wal.syncrate = 0;
+    srv->wal.wantsync = 1;
 
-    port = SERVER();
+    port = SERVER(srv);
     fd = mustdiallocal(port);
     for (i = 1; i <= 96; i++) {
         mustsend(fd, "put 0 0 120 22\r\n");
@@ -748,12 +756,13 @@ cttestbinlogallocation()
 void
 cttestbinlogread()
 {
-    srv.wal.dir = ctdir();
-    srv.wal.use = 1;
-    srv.wal.syncrate = 0;
-    srv.wal.wantsync = 1;
+    Server *srv = server_new();
+    srv->wal.dir = ctdir();
+    srv->wal.use = 1;
+    srv->wal.syncrate = 0;
+    srv->wal.wantsync = 1;
 
-    port = SERVER();
+    port = SERVER(srv);
     fd = mustdiallocal(port);
     mustsend(fd, "use test\r\n");
     ckresp(fd, "USING test\r\n");
@@ -779,7 +788,7 @@ cttestbinlogread()
     kill(srvpid, 9);
     waitpid(srvpid, NULL, 0);
 
-    port = SERVER();
+    port = SERVER(srv);
     fd = mustdiallocal(port);
     mustsend(fd, "watch test\r\n");
     ckresp(fd, "WATCHING 2\r\n");
@@ -800,14 +809,15 @@ cttestbinlogdiskfull()
     falloc = &wrapfalloc;
     fallocpat[0] = 1;
     fallocpat[2] = 1;
+    Server *srv = server_new();
 
-    srv.wal.dir = ctdir();
-    srv.wal.use = 1;
-    srv.wal.filesize = size;
-    srv.wal.syncrate = 0;
-    srv.wal.wantsync = 1;
+    srv->wal.dir = ctdir();
+    srv->wal.use = 1;
+    srv->wal.filesize = size;
+    srv->wal.syncrate = 0;
+    srv->wal.wantsync = 1;
 
-    port = SERVER();
+    port = SERVER(srv);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 0 100 50\r\n");
     mustsend(fd, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n");
@@ -865,14 +875,15 @@ cttestbinlogdiskfulldelete()
     falloc = &wrapfalloc;
     fallocpat[0] = 1;
     fallocpat[1] = 1;
+    Server *srv = server_new();
 
-    srv.wal.dir = ctdir();
-    srv.wal.use = 1;
-    srv.wal.filesize = size;
-    srv.wal.syncrate = 0;
-    srv.wal.wantsync = 1;
+    srv->wal.dir = ctdir();
+    srv->wal.use = 1;
+    srv->wal.filesize = size;
+    srv->wal.syncrate = 0;
+    srv->wal.wantsync = 1;
 
-    port = SERVER();
+    port = SERVER(srv);
     fd = mustdiallocal(port);
     mustsend(fd, "put 0 0 100 50\r\n");
     mustsend(fd, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n");
@@ -929,6 +940,7 @@ void
 cttestbinlogv5()
 {
     char portstr[10];
+    Server *srv = server_new();
 
     if (system("which beanstalkd-1.4.6") != 0) {
         puts("beanstalkd 1.4.6 not found, skipping");
@@ -1020,12 +1032,12 @@ cttestbinlogv5()
     kill(srvpid, 9);
     waitpid(srvpid, NULL, 0);
 
-    srv.wal.dir = ctdir();
-    srv.wal.use = 1;
-    srv.wal.syncrate = 0;
-    srv.wal.wantsync = 1;
+    srv->wal.dir = ctdir();
+    srv->wal.use = 1;
+    srv->wal.syncrate = 0;
+    srv->wal.wantsync = 1;
 
-    port = SERVER();
+    port = SERVER(srv);
     fd = mustdiallocal(port);
 
     mustsend(fd, "stats-job 1\r\n");
@@ -1101,7 +1113,7 @@ cttestbinlogv5()
 static void
 benchputdeletesize(int n, int size)
 {
-    port = SERVER();
+    port = SERVER(NULL);
     fd = mustdiallocal(port);
     char buf[50], put[50];
     char body[size+1];

@@ -439,7 +439,7 @@ waldirlock(Wal *w)
 
 
 void
-walread(Wal *w, job list, int min)
+walread(Wal *w, JobStore * store, job list, int min)
 {
     File *f;
     int i, fd;
@@ -468,7 +468,7 @@ walread(Wal *w, job list, int min)
 
         f->fd = fd;
         fileadd(f, w);
-        err |= fileread(f, list);
+        err |= fileread(f, store, list);
         close(fd);
     }
 
@@ -480,12 +480,12 @@ walread(Wal *w, job list, int min)
 
 
 void
-walinit(Wal *w, job list)
+walinit(Wal *w, JobStore *store, job list)
 {
     int min;
 
     min = walscandir(w);
-    walread(w, list, min);
+    walread(w, store, list, min);
 
     // first writable file
     if (!makenextfile(w)) {

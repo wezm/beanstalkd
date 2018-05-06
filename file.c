@@ -12,8 +12,8 @@
 #include <string.h>
 #include "dat.h"
 
-static int  readrec(File*, job, int*);
-static int  readrec5(File*, job, int*);
+static int  readrec(File*, JobStore*, job, int*);
+static int  readrec5(File*, JobStore*, job, int*);
 static int  readfull(File*, void*, int, int*, char*);
 static void warnpos(File*, int, char*, ...)
 __attribute__((format(printf, 3, 4)));
@@ -104,7 +104,7 @@ filermjob(File *f, job j)
 // Fileread reads jobs from f->path into list.
 // It returns 0 on success, or 1 if any errors occurred.
 int
-fileread(File *f, job list)
+fileread(File *f, JobStore *store, job list)
 {
     int err = 0, v;
 
@@ -114,12 +114,12 @@ fileread(File *f, job list)
     switch (v) {
     case Walver:
         fileincref(f);
-        while (readrec(f, list, &err));
+        while (readrec(f, store, list, &err));
         filedecref(f);
         return err;
     case Walver5:
         fileincref(f);
-        while (readrec5(f, list, &err));
+        while (readrec5(f, store, list, &err));
         filedecref(f);
         return err;
     }
@@ -133,7 +133,7 @@ fileread(File *f, job list)
 // If an error occurs, it sets *err to 1.
 // Readrec returns the number of records read, either 1 or 0.
 static int
-readrec(File *f, job l, int *err)
+readrec(File *f, JobStore *store, job l, int *err)
 {
     int r, sz = 0;
     int namelen;
@@ -183,7 +183,7 @@ readrec(File *f, job l, int *err)
     // are we reading trailing zeroes?
     if (!jr.id) return 0;
 
-    j = job_find(jr.id);
+    j = job_find(store, jr.id);
     if (!(j || namelen)) {
         // We read a short record without having seen a
         // full record for this job, so the full record
@@ -209,7 +209,7 @@ readrec(File *f, job l, int *err)
                 goto Error;
             }
             t = tube_find_or_make(tubename);
-            j = make_job_with_id(jr.pri, jr.delay, jr.ttr, jr.body_size,
+            j = make_job_with_id(store, jr.pri, jr.delay, jr.ttr, jr.body_size,
                                  t, jr.id);
             j->next = j->prev = j;
             j->r.created_at = jr.created_at;
@@ -244,7 +244,7 @@ readrec(File *f, job l, int *err)
         if (j) {
             job_remove(j);
             filermjob(j->file, j);
-            job_free(j);
+            job_free(store, j);
         }
         return 1;
     }
@@ -254,7 +254,7 @@ Error:
     if (j) {
         job_remove(j);
         filermjob(j->file, j);
-        job_free(j);
+        job_free(store, j);
     }
     return 0;
 }
@@ -263,7 +263,7 @@ Error:
 // Readrec5 is like readrec, but it reads a record in "version 5"
 // of the log format.
 static int
-readrec5(File *f, job l, int *err)
+readrec5(File *f, JobStore *store, job l, int *err)
 {
     int r, sz = 0;
     size_t namelen;
@@ -307,7 +307,7 @@ readrec5(File *f, job l, int *err)
     // are we reading trailing zeroes?
     if (!jr.id) return 0;
 
-    j = job_find(jr.id);
+    j = job_find(store, jr.id);
     if (!(j || namelen)) {
         // We read a short record without having seen a
         // full record for this job, so the full record
@@ -333,7 +333,7 @@ readrec5(File *f, job l, int *err)
                 goto Error;
             }
             t = tube_find_or_make(tubename);
-            j = make_job_with_id(jr.pri, jr.delay, jr.ttr, jr.body_size,
+            j = make_job_with_id(store, jr.pri, jr.delay, jr.ttr, jr.body_size,
                                  t, jr.id);
             j->next = j->prev = j;
             j->r.created_at = jr.created_at;
@@ -380,7 +380,7 @@ readrec5(File *f, job l, int *err)
         if (j) {
             job_remove(j);
             filermjob(j->file, j);
-            job_free(j);
+            job_free(store, j);
         }
         return 1;
     }
@@ -390,7 +390,7 @@ Error:
     if (j) {
         job_remove(j);
         filermjob(j->file, j);
-        job_free(j);
+        job_free(store, j);
     }
     return 0;
 }

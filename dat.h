@@ -1,6 +1,7 @@
 // Requirements:
 // #include <stdint.h>
 // #include <stdlib.h>
+#include <stdbool.h>
 
 typedef unsigned char uchar;
 typedef uchar         byte;
@@ -59,7 +60,6 @@ typedef int(FAlloc)(int, int);
 
 extern const char version[];
 extern int verbose;
-extern struct Server srv;
 
 // Replaced by tests to simulate failures.
 extern FAlloc *falloc;
@@ -134,6 +134,18 @@ struct Jobrec {
     byte   state;
 };
 
+typedef struct _job_store {
+    uint64 next_id;
+
+    int cur_prime;
+
+    job *all_jobs;
+    size_t all_jobs_cap;
+    size_t all_jobs_used;
+
+    bool hash_table_was_oom;
+} JobStore;
+
 struct job {
     Jobrec r; // persistent fields; these get written to the wal
 
@@ -193,16 +205,17 @@ int ms_remove(ms a, void *item);
 int ms_contains(ms a, void *item);
 void *ms_take(ms a);
 
+JobStore *job_store_new(void);
 
-#define make_job(pri,delay,ttr,body_size,tube) make_job_with_id(pri,delay,ttr,body_size,tube,0)
+#define make_job(store, pri,delay,ttr,body_size,tube) make_job_with_id(store, pri,delay,ttr,body_size,tube,0)
 
 job allocate_job(int body_size);
-job make_job_with_id(uint pri, int64 delay, int64 ttr,
+job make_job_with_id(JobStore *store, uint pri, int64 delay, int64 ttr,
              int body_size, tube tube, uint64 id);
-void job_free(job j);
+void job_free(JobStore *store, job j);
 
 /* Lookup a job by job ID */
-job job_find(uint64 job_id);
+job job_find(const JobStore *const store, uint64 job_id);
 
 /* the void* parameters are really job pointers */
 void job_setheappos(void*, int);
@@ -217,10 +230,10 @@ int job_list_any_p(job head);
 job job_remove(job j);
 void job_insert(job head, job j);
 
-uint64 total_jobs(void);
+uint64 total_jobs(const JobStore *const);
 
 /* for unit tests */
-size_t get_all_jobs_used(void);
+size_t get_all_jobs_used(const JobStore *const);
 
 
 extern struct ms tubes;
@@ -259,6 +272,7 @@ void prot_remove_tube(tube t);
 int  prot_replay(Server *s, job list);
 
 
+Server *server_new(void);
 int make_server_socket(char *host_addr, char *port);
 
 
@@ -337,7 +351,7 @@ struct Wal {
     int    nocomp; // disable binlog compaction?
 };
 int  waldirlock(Wal*);
-void walinit(Wal*, job list);
+void walinit(Wal*, JobStore *store, job list);
 int  walwrite(Wal*, job);
 void walmaint(Wal*);
 int  walresvput(Wal*, job);
@@ -364,7 +378,7 @@ void fileincref(File*);
 void filedecref(File*);
 void fileaddjob(File*, job);
 void filermjob(File*, job);
-int  fileread(File*, job list);
+int  fileread(File*, JobStore *store, job list);
 void filewopen(File*);
 void filewclose(File*);
 int  filewrjobshort(File*, job);
@@ -381,6 +395,7 @@ struct Server {
     Wal    wal;
     Socket sock;
     Heap   conns;
+    JobStore *store;
 };
 void srvserve(Server *srv);
 void srvaccept(Server *s, int ev);

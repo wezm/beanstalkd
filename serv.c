@@ -3,15 +3,25 @@
 #include <sys/socket.h>
 #include "dat.h"
 
-struct Server srv = {
-    Portdef,
-    NULL,
-    NULL,
-    {
-        Filesizedef,
-    },
-};
+Server *server_new(void) {
+    struct Server *srv = calloc(1, sizeof(struct Server));
+    if (!srv) {
+        twarnx("OOM");
+        return NULL;
+    }
 
+    srv->store = job_store_new();
+    if (!srv->store) {
+        free(srv);
+        return NULL;
+    }
+    srv->port = Portdef;
+    srv->wal.filesize = Filesizedef;
+
+    return srv;
+}
+
+// TODO: server_free()
 
 void
 srvserve(Server *s)

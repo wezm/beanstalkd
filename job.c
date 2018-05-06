@@ -3,88 +3,106 @@
 #include <string.h>
 #include "dat.h"
 
-static uint64 next_id = 1;
+/* static uint64 next_id = 1; */
 
-static int cur_prime = 0;
+/* static int cur_prime = 0; */
 
-static job all_jobs_init[12289] = {0};
-static job *all_jobs = all_jobs_init;
-static size_t all_jobs_cap = 12289; /* == primes[0] */
-static size_t all_jobs_used = 0;
+/* static job all_jobs_init[12289] = {0}; */
+/* static job *all_jobs = all_jobs_init; */
+/* static size_t all_jobs_cap = 12289; [> == primes[0] <] */
+/* static size_t all_jobs_used = 0; */
 
-static int hash_table_was_oom = 0;
+/* static int hash_table_was_oom = 0; */
 
-static void rehash();
+static void rehash(JobStore *store, bool is_upscaling);
 
 static int
-_get_job_hash_index(uint64 job_id)
+_get_job_hash_index(const JobStore *const store, uint64 job_id)
 {
-    return job_id % all_jobs_cap;
+    return job_id % store->all_jobs_cap;
+}
+
+JobStore *
+job_store_new(void)
+{
+    JobStore *store = calloc(1, sizeof(JobStore));
+    if (!store) return twarnx("OOM"), (JobStore *) 0;
+
+    store->next_id = 1;
+    store->all_jobs = calloc(primes[store->cur_prime], sizeof(struct job)); // 12289 == primes[0]
+    if (!store->all_jobs) {
+        twarnx("OOM");
+
+        free(store);
+        return NULL;
+    }
+    store->all_jobs_cap = primes[store->cur_prime];
+
+    return store;
 }
 
 static void
-store_job(job j)
+store_job(JobStore *store, job j)
 {
     int index = 0;
 
-    index = _get_job_hash_index(j->r.id);
+    index = _get_job_hash_index(store, j->r.id);
 
-    j->ht_next = all_jobs[index];
-    all_jobs[index] = j;
-    all_jobs_used++;
+    j->ht_next = store->all_jobs[index];
+    store->all_jobs[index] = j;
+    store->all_jobs_used++;
 
     /* accept a load factor of 4 */
-    if (all_jobs_used > (all_jobs_cap << 2)) rehash(1);
+    if (store->all_jobs_used > (store->all_jobs_cap << 2)) rehash(store, true);
 }
 
 static void
-rehash(int is_upscaling)
+rehash(JobStore *store, bool is_upscaling)
 {
-    job *old = all_jobs;
-    size_t old_cap = all_jobs_cap, old_used = all_jobs_used, i;
-    int old_prime = cur_prime;
+    job *old = store->all_jobs;
+    size_t old_cap = store->all_jobs_cap, old_used = store->all_jobs_used, i;
+    int old_prime = store->cur_prime;
     int d = is_upscaling ? 1 : -1;
 
-    if (cur_prime + d >= NUM_PRIMES) return;
-    if (cur_prime + d < 0) return;
-    if (is_upscaling && hash_table_was_oom) return;
+    if (store->cur_prime + d >= NUM_PRIMES) return;
+    if (store->cur_prime + d < 0) return;
+    if (is_upscaling && store->hash_table_was_oom) return;
 
-    cur_prime += d;
+    store->cur_prime += d;
 
-    all_jobs_cap = primes[cur_prime];
-    all_jobs = calloc(all_jobs_cap, sizeof(job));
-    if (!all_jobs) {
-        twarnx("Failed to allocate %zu new hash buckets", all_jobs_cap);
-        hash_table_was_oom = 1;
-        cur_prime = old_prime;
-        all_jobs = old;
-        all_jobs_cap = old_cap;
-        all_jobs_used = old_used;
+    store->all_jobs_cap = primes[store->cur_prime];
+    store->all_jobs = calloc(store->all_jobs_cap, sizeof(job));
+    if (!store->all_jobs) {
+        twarnx("Failed to allocate %zu new hash buckets", store->all_jobs_cap);
+        store->hash_table_was_oom = true;
+        store->cur_prime = old_prime;
+        store->all_jobs = old;
+        store->all_jobs_cap = old_cap;
+        store->all_jobs_used = old_used;
         return;
     }
-    all_jobs_used = 0;
-    hash_table_was_oom = 0;
+    store->all_jobs_used = 0;
+    store->hash_table_was_oom = false;
 
     for (i = 0; i < old_cap; i++) {
         while (old[i]) {
             job j = old[i];
             old[i] = j->ht_next;
             j->ht_next = NULL;
-            store_job(j);
+            store_job(store, j);
         }
     }
-    if (old != all_jobs_init) {
-        free(old);
-    }
+
+    free(old);
 }
 
 job
-job_find(uint64 job_id)
+job_find(const JobStore *const store, uint64 job_id)
 {
     job jh = NULL;
-    int index = _get_job_hash_index(job_id);
+    int index = _get_job_hash_index(store, job_id);
 
-    for (jh = all_jobs[index]; jh && jh->r.id != job_id; jh = jh->ht_next);
+    for (jh = store->all_jobs[index]; jh && jh->r.id != job_id; jh = jh->ht_next);
 
     return jh;
 }
@@ -105,7 +123,7 @@ allocate_job(int body_size)
 }
 
 job
-make_job_with_id(uint pri, int64 delay, int64 ttr,
+make_job_with_id(JobStore *store, uint pri, int64 delay, int64 ttr,
                  int body_size, tube tube, uint64 id)
 {
     job j;
@@ -115,15 +133,15 @@ make_job_with_id(uint pri, int64 delay, int64 ttr,
 
     if (id) {
         j->r.id = id;
-        if (id >= next_id) next_id = id + 1;
+        if (id >= store->next_id) store->next_id = id + 1;
     } else {
-        j->r.id = next_id++;
+        j->r.id = store->next_id++;
     }
     j->r.pri = pri;
     j->r.delay = delay;
     j->r.ttr = ttr;
 
-    store_job(j);
+    store_job(store, j);
 
     TUBE_ASSIGN(j->tube, tube);
 
@@ -131,27 +149,27 @@ make_job_with_id(uint pri, int64 delay, int64 ttr,
 }
 
 static void
-job_hash_free(job j)
+job_hash_free(JobStore *store, job j)
 {
     job *slot;
 
-    slot = &all_jobs[_get_job_hash_index(j->r.id)];
+    slot = &store->all_jobs[_get_job_hash_index(store, j->r.id)];
     while (*slot && *slot != j) slot = &(*slot)->ht_next;
     if (*slot) {
         *slot = (*slot)->ht_next;
-        --all_jobs_used;
+        store->all_jobs_used--;
     }
 
     // Downscale when the hashmap is too sparse
-    if (all_jobs_used < (all_jobs_cap >> 4)) rehash(0);
+    if (store->all_jobs_used < (store->all_jobs_cap >> 4)) rehash(store, false);
 }
 
 void
-job_free(job j)
+job_free(JobStore *store, job j)
 {
     if (j) {
         TUBE_ASSIGN(j->tube, NULL);
-        if (j->r.state != Copy) job_hash_free(j);
+        if (j->r.state != Copy) job_hash_free(store, j);
     }
 
     free(j);
@@ -247,14 +265,14 @@ job_insert(job head, job j)
 }
 
 uint64
-total_jobs()
+total_jobs(const JobStore *const store)
 {
-    return next_id - 1;
+    return store->next_id - 1;
 }
 
 /* for unit tests */
 size_t
-get_all_jobs_used()
+get_all_jobs_used(const JobStore *const store)
 {
-    return all_jobs_used;
+    return store->all_jobs_used;
 }

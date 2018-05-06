@@ -10,13 +10,14 @@
 void
 cttestheap_insert_one()
 {
+    JobStore *store = job_store_new();
     Heap h = {0};
     job j;
 
     h.less = job_pri_less;
     h.rec = job_setheappos;
 
-    j = make_job(1, 0, 1, 0, 0);
+    j = make_job(store, 1, 0, 1, 0, 0);
     assertf(j, "allocate job");
 
     heapinsert(&h, j);
@@ -28,13 +29,14 @@ cttestheap_insert_one()
 void
 cttestheap_insert_and_remove_one()
 {
+    JobStore *store = job_store_new();
     Heap h = {0};
     int r;
     job j, j1;
 
     h.less = job_pri_less;
     h.rec = job_setheappos;
-    j1 = make_job(1, 0, 1, 0, 0);
+    j1 = make_job(store, 1, 0, 1, 0, 0);
     assertf(j1, "allocate job");
 
     r = heapinsert(&h, j1);
@@ -51,15 +53,16 @@ cttestheap_insert_and_remove_one()
 void
 cttestheap_priority()
 {
+    JobStore *store = job_store_new();
     Heap h = {0};
     int r;
     job j, j1, j2, j3;
 
     h.less = job_pri_less;
     h.rec = job_setheappos;
-    j1 = make_job(1, 0, 1, 0, 0);
-    j2 = make_job(2, 0, 1, 0, 0);
-    j3 = make_job(3, 0, 1, 0, 0);
+    j1 = make_job(store, 1, 0, 1, 0, 0);
+    j2 = make_job(store, 2, 0, 1, 0, 0);
+    j3 = make_job(store, 3, 0, 1, 0, 0);
     assertf(j1, "allocate job");
     assertf(j2, "allocate job");
     assertf(j3, "allocate job");
@@ -96,15 +99,16 @@ cttestheap_priority()
 void
 cttestheap_fifo_property()
 {
+    JobStore *store = job_store_new();
     Heap h = {0};
     int r;
     job j, j3a, j3b, j3c;
 
     h.less = job_pri_less;
     h.rec = job_setheappos;
-    j3a = make_job(3, 0, 1, 0, 0);
-    j3b = make_job(3, 0, 1, 0, 0);
-    j3c = make_job(3, 0, 1, 0, 0);
+    j3a = make_job(store, 3, 0, 1, 0, 0);
+    j3b = make_job(store, 3, 0, 1, 0, 0);
+    j3c = make_job(store, 3, 0, 1, 0, 0);
     assertf(j3a, "allocate job");
     assertf(j3b, "allocate job");
     assertf(j3c, "allocate job");
@@ -144,6 +148,7 @@ cttestheap_fifo_property()
 void
 cttestheap_many_jobs()
 {
+    JobStore *store = job_store_new();
     Heap h = {0};
     uint last_pri;
     int r, i, n = 20;
@@ -153,7 +158,7 @@ cttestheap_many_jobs()
     h.rec = job_setheappos;
 
     for (i = 0; i < n; i++) {
-        j = make_job(1 + rand() % 8192, 0, 1, 0, 0);
+        j = make_job(store, 1 + rand() % 8192, 0, 1, 0, 0);
         assertf(j, "allocation");
         r = heapinsert(&h, j);
         assertf(r, "heapinsert");
@@ -171,6 +176,7 @@ cttestheap_many_jobs()
 void
 cttestheap_remove_k()
 {
+    JobStore *store = job_store_new();
     Heap h = {0};
     uint last_pri;
     int r, i, c, n = 20;
@@ -181,7 +187,7 @@ cttestheap_remove_k()
 
     for (c = 0; c < 50; c++) {
         for (i = 0; i < n; i++) {
-            j = make_job(1 + rand() % 8192, 0, 1, 0, 0);
+            j = make_job(store, 1 + rand() % 8192, 0, 1, 0, 0);
             assertf(j, "allocation");
             r = heapinsert(&h, j);
             assertf(r, "heapinsert");
@@ -203,12 +209,13 @@ cttestheap_remove_k()
 void
 ctbenchheapinsert(int n)
 {
+    JobStore *store = job_store_new();
     job *j;
     int i;
     j = calloc(n, sizeof *j);
     assert(j);
     for (i = 0; i < n; i++) {
-        j[i] = make_job(1, 0, 1, 0, 0);
+        j[i] = make_job(store, 1, 0, 1, 0, 0);
         assert(j[i]);
         j[i]->r.pri = -j[i]->r.id;
     }
@@ -224,6 +231,7 @@ ctbenchheapinsert(int n)
 void
 ctbenchheapremove(int n)
 {
+    JobStore *store = job_store_new();
     Heap h = {0};
     job j;
     int i;
@@ -231,7 +239,7 @@ ctbenchheapremove(int n)
     h.less = job_pri_less;
     h.rec = job_setheappos;
     for (i = 0; i < n; i++) {
-        j = make_job(1, 0, 1, 0, 0);
+        j = make_job(store, 1, 0, 1, 0, 0);
         assertf(j, "allocate job");
         heapinsert(&h, j);
     }

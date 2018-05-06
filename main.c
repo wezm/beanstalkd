@@ -52,42 +52,47 @@ main(int argc, char **argv)
 {
     int r;
     struct job list = {};
+    Server *srv = server_new();
+    if (!srv) {
+      twarnx("failed to allocate server");
+      return 1;
+    }
 
     progname = argv[0];
     setlinebuf(stdout);
-    optparse(&srv, argv+1);
+    optparse(srv, argv+1);
 
     if (verbose) {
         printf("pid %d\n", getpid());
     }
 
-    r = make_server_socket(srv.addr, srv.port);
+    r = make_server_socket(srv->addr, srv->port);
     if (r == -1) twarnx("make_server_socket()"), exit(111);
-    srv.sock.fd = r;
+    srv->sock.fd = r;
 
     prot_init();
 
-    if (srv.user) su(srv.user);
+    if (srv->user) su(srv->user);
     set_sig_handlers();
 
-    if (srv.wal.use) {
+    if (srv->wal.use) {
         // We want to make sure that only one beanstalkd tries
         // to use the wal directory at a time. So acquire a lock
         // now and never release it.
-        if (!waldirlock(&srv.wal)) {
-            twarnx("failed to lock wal dir %s", srv.wal.dir);
+        if (!waldirlock(&srv->wal)) {
+            twarnx("failed to lock wal dir %s", srv->wal.dir);
             exit(10);
         }
 
         list.prev = list.next = &list;
-        walinit(&srv.wal, &list);
-        r = prot_replay(&srv, &list);
+        walinit(&srv->wal, srv->store, &list);
+        r = prot_replay(srv, &list);
         if (!r) {
             twarnx("failed to replay log");
             return 1;
         }
     }
 
-    srvserve(&srv);
+    srvserve(srv);
     return 0;
 }

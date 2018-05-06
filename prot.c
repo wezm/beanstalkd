@@ -695,9 +695,9 @@ touch_job(Conn *c, job j)
 }
 
 static job
-peek_job(uint64 id)
+peek_job(const JobStore *const store, uint64 id)
 {
-    return job_find(id);
+    return job_find(store, id);
 }
 
 static void
@@ -823,13 +823,14 @@ enqueue_incoming_job(Conn *c)
 {
     int r;
     job j = c->in_job;
+    JobStore *store = c->srv->store;
 
     c->in_job = NULL; /* the connection no longer owns this job */
     c->in_job_read = 0;
 
     /* check if the trailer is present and correct */
     if (memcmp(j->body + j->r.body_size - 2, "\r\n", 2)) {
-        job_free(j);
+        job_free(store, j);
         return reply_msg(c, MSG_EXPECTED_CRLF);
     }
 
@@ -838,7 +839,7 @@ enqueue_incoming_job(Conn *c)
     }
 
     if (drain_mode) {
-        job_free(j);
+        job_free(store, j);
         return reply_serr(c, MSG_DRAINING);
     }
 
@@ -1193,6 +1194,7 @@ dispatch_cmd(Conn *c)
     int64 delay, ttr;
     uint64 id;
     tube t = NULL;
+    JobStore *store = c->srv->store;
 
     /* NUL-terminate this string so we can use strtol and friends */
     c->cmd[c->cmd_len - 2] = '\0';
@@ -1238,7 +1240,7 @@ dispatch_cmd(Conn *c)
             ttr = 1000000000;
         }
 
-        c->in_job = make_job(pri, delay, ttr, body_size + 2, c->use);
+        c->in_job = make_job(store, pri, delay, ttr, body_size + 2, c->use);
 
         /* OOM? */
         if (!c->in_job) {
@@ -1305,7 +1307,7 @@ dispatch_cmd(Conn *c)
         /* So, peek is annoying, because some other connection might free the
          * job while we are still trying to write it out. So we copy it and
          * then free the copy when it's done sending. */
-        j = job_copy(peek_job(id));
+        j = job_copy(peek_job(store, id));
 
         if (!j) return reply(c, MSG_NOTFOUND, MSG_NOTFOUND_LEN, STATE_SENDWORD);
 
@@ -1338,7 +1340,7 @@ dispatch_cmd(Conn *c)
         if (errno) return reply_msg(c, MSG_BAD_FORMAT);
         op_ct[type]++;
 
-        j = job_find(id);
+        j = job_find(store, id);
         j = remove_reserved_job(c, j) ? :
             remove_ready_job(j) ? :
             remove_buried_job(j) ? :
@@ -1351,7 +1353,7 @@ dispatch_cmd(Conn *c)
         j->r.state = Invalid;
         r = walwrite(&c->srv->wal, j);
         walmaint(&c->srv->wal);
-        job_free(j);
+        job_free(store, j);
 
         if (!r) return reply_serr(c, MSG_INTERNAL_ERROR);
 
@@ -1369,7 +1371,7 @@ dispatch_cmd(Conn *c)
         if (r) return reply_msg(c, MSG_BAD_FORMAT);
         op_ct[type]++;
 
-        j = remove_reserved_job(c, job_find(id));
+        j = remove_reserved_job(c, job_find(store, id));
 
         if (!j) return reply(c, MSG_NOTFOUND, MSG_NOTFOUND_LEN, STATE_SENDWORD);
 
@@ -1404,7 +1406,7 @@ dispatch_cmd(Conn *c)
         if (r) return reply_msg(c, MSG_BAD_FORMAT);
         op_ct[type]++;
 
-        j = remove_reserved_job(c, job_find(id));
+        j = remove_reserved_job(c, job_find(store, id));
 
         if (!j) return reply(c, MSG_NOTFOUND, MSG_NOTFOUND_LEN, STATE_SENDWORD);
 
@@ -1433,7 +1435,7 @@ dispatch_cmd(Conn *c)
 
         op_ct[type]++;
 
-        j = job_find(id);
+        j = job_find(store, id);
         if (!j) return reply(c, MSG_NOTFOUND, MSG_NOTFOUND_LEN, STATE_SENDWORD);
 
         if ((j->r.state == Buried && kick_buried_job(c->srv, j)) ||
@@ -1450,7 +1452,7 @@ dispatch_cmd(Conn *c)
 
         op_ct[type]++;
 
-        j = touch_job(c, job_find(id));
+        j = touch_job(c, job_find(store, id));
 
         if (j) {
             reply(c, MSG_TOUCHED, MSG_TOUCHED_LEN, STATE_SENDWORD);
@@ -1475,7 +1477,7 @@ dispatch_cmd(Conn *c)
 
         op_ct[type]++;
 
-        j = peek_job(id);
+        j = peek_job(store, id);
         if (!j) return reply(c, MSG_NOTFOUND, MSG_NOTFOUND_LEN, STATE_SENDWORD);
 
         if (!j->tube) return reply_serr(c, MSG_INTERNAL_ERROR);
@@ -1669,7 +1671,7 @@ reset_conn(Conn *c)
     dirty = c;
 
     /* was this a peek or stats command? */
-    if (c->out_job && c->out_job->r.state == Copy) job_free(c->out_job);
+    if (c->out_job && c->out_job->r.state == Copy) job_free(c->srv->store, c->out_job);
     c->out_job = NULL;
 
     c->reply_sent = 0; /* now that we're done, reset this */
