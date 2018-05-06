@@ -2,6 +2,7 @@ PREFIX=/usr/local
 BINDIR=$(DESTDIR)$(PREFIX)/bin
 CFLAGS=-Wall -Werror\
 	-Wformat=2\
+	-fprofile-instr-generate -fcoverage-mapping \
 	-g\
 
 LDFLAGS=
@@ -49,11 +50,17 @@ endif
 CLEANFILES=\
 	vers.c\
 
+BEANSTALKD_RUST_LIB=target/release/libbeanstalkd.a
+
 .PHONY: all
 all: $(TARG)
 
-$(TARG): $(OFILES) $(MOFILE)
-	$(LINK.o) -o $@ $^ $(LDLIBS)
+.PHONY: target/release/libbeanstalkd.a
+target/release/libbeanstalkd.a:
+	cargo build --verbose --release
+
+$(TARG): $(OFILES) $(MOFILE) $(BEANSTALKD_RUST_LIB)
+	$(LINK.o) -fprofile-instr-generate -o $@ $^ $(LDLIBS)
 
 .PHONY: install
 install: $(BINDIR)/$(TARG)
@@ -69,6 +76,7 @@ $(OFILES) $(MOFILE): $(HFILES)
 .PHONY: clean
 clean:
 	rm -f *.o $(CLEANFILES)
+	cargo clean
 
 .PHONY: check
 check: ct/_ctcheck
@@ -78,7 +86,8 @@ check: ct/_ctcheck
 bench: ct/_ctcheck
 	ct/_ctcheck -b
 
-ct/_ctcheck: ct/_ctcheck.o ct/ct.o $(OFILES) $(TOFILES)
+ct/_ctcheck: ct/_ctcheck.o ct/ct.o $(OFILES) $(TOFILES) $(BEANSTALKD_RUST_LIB)
+	$(LINK.o) -fprofile-instr-generate -o $@ $^ $(LDLIBS)
 
 ct/_ctcheck.c: $(TOFILES) ct/gen
 	ct/gen $(TOFILES) >$@.part

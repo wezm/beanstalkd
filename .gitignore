@@ -2,3 +2,6 @@
 /vers.c
 /beanstalkd
 /News
+
+/target
+**/*.rs.bk
