@@ -40,9 +40,12 @@ HFILES=\
 	dat.h\
 	sd-daemon.h\
 
+LDLIBS =\
+	-lpthread
+
 ifeq ($(OS),linux)
 
-LDLIBS=\
+LDLIBS:=\
 	-lrt\
 
 endif
